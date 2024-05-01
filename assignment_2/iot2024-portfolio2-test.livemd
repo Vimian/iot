@@ -33,7 +33,8 @@ This section is executed once.
 ```elixir
 idf_kino =
   Kino.Input.text("Enter directory containing \"idf.py\" file",
-    default: "/home/aslak/vcs/git/esp-idf/tools/idf.py"
+    # "/home/aslak/vcs/git/esp-idf/tools/idf.py"
+    default: "/Users/caspe/Desktop/Github/espressif/esp-idf/tools/idf.py"
   )
 ```
 
@@ -106,7 +107,8 @@ This is filled out and executed once per student.
 ```elixir
 project_kino =
   Kino.Input.text("Enter directory containing \"CMakeLists.txt\" file",
-    default: "/home/aslak/vcs/git/iot-course/src/wifi-count/esp32-freetros/"
+    # "/home/aslak/vcs/git/iot-course/src/wifi-count/esp32-freetros/"
+    default: "/Users/caspe/Desktop/Github/Vimian/iot/assignment_2/src/"
   )
 ```
 

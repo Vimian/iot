@@ -15,6 +15,14 @@ mix deps.get
 
 ```
 cd <livebook github repo>
+iex --sname test
+
+//New terminal
+
 set MIX_ENV=prod
 mix phx.server
 ```
+
+## Open script
+
+Locate file in local storage.
