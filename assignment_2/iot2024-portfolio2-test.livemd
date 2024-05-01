@@ -1,0 +1,537 @@
+# IoT 2024 Portfolio #2 Test Code
+
+```elixir
+Mix.install([
+  {:circuits_uart, "~> 1.5"},
+  {:kino, "~> 0.12.3"},
+  {:tortoise, "~> 0.10.0"}
+])
+```
+
+## Introduction
+
+This notebook documents the test process that will be used for evaluating your Portfolio #2 handin.
+
+**Note 1:** This has not been properly tested, so it will likely contain bugs. These will get fixed as I (Aslak) find them.
+
+**Note 2:** This kind of code tends to have fairly platform specific aspects. I have tested it on a Debian box, but your mileage may vary. Don't worry about this. You don't have to run it. But you should *read* it to understand which mechanisms are being used.
+
+## Setup
+
+This section is fetches the relevant environment for the remainder of the notebook. This includes:
+
+* [Path to ESP-IDF](#cell-4htwocn6uexxvcg4) where we define the absolute path to the `idf.py` file.
+* [Environment Variables](#cell-t7zx6arqhyqizqbf) where we pull in an environment dump from a session where the esp-idf export script has been run.
+* [Extablishing Configuration](#cell-xkcufoez5lhygvv4) Defining configuration properties.
+
+This section is executed once.
+
+<!-- livebook:{"break_markdown":true} -->
+
+### Path to ESP-IDF
+
+```elixir
+idf_kino =
+  Kino.Input.text("Enter directory containing \"idf.py\" file",
+    default: "/home/aslak/vcs/git/esp-idf/tools/idf.py"
+  )
+```
+
+```elixir
+idf_path = idf_kino |> Kino.Input.read()
+```
+
+### Environment Variables
+
+<!-- livebook:{"break_markdown":true} -->
+
+Pick an environment variable file (this is a dump of the output of the `printenv` command on a UNIX system):
+
+```elixir
+env_kino = Kino.Input.file("Dump of environment variables")
+```
+
+```elixir
+env_filename =
+  env_kino
+  |> Kino.Input.read()
+  |> (fn value -> Kino.Input.file_path(value.file_ref) end).()
+```
+
+```elixir
+{:ok, lines} = File.read(env_filename)
+
+env =
+  lines
+  |> String.split("\n")
+  |> Enum.map(fn line -> line |> String.split("=") end)
+  |> Enum.filter(fn entry -> length(entry) == 2 end)
+  |> Enum.map(fn [key, value] -> {key, value} end)
+```
+
+### Defining Configuration Properties
+
+```elixir
+elements = [
+  Kino.Input.text("WIFI_SSID", default: "SkyNet"),
+  Kino.Input.text("WIFI_PASS", default: "Summer"),
+  Kino.Input.text("MQTT_BROKER", default: "mqtt://broker.hivemq.com"),
+  Kino.Input.text("MQTT_COMMAND_TOPIC", default: "org/sdu/2024/iot/my/name/command"),
+  Kino.Input.text("MQTT_RESPONSE_TOPIC", default: "org/sdu/2024/iot/my/name/response")
+]
+
+Kino.Layout.grid(elements)
+```
+
+```elixir
+[wifi_ssid, wifi_pass, mqtt_broker, mqtt_command_topic, mqtt_response_topic] =
+  elements
+  |> Enum.map(&Kino.Input.read/1)
+
+config = %{
+  "WIFI_SSID" => wifi_ssid,
+  "WIFI_PASS" => wifi_pass,
+  "MQTT_BROKER" => mqtt_broker,
+  "MQTT_COMMAND_TOPIC" => mqtt_command_topic,
+  "MQTT_RESPONSE_TOPIC" => mqtt_response_topic
+}
+```
+
+## Locate Project
+
+This section is used to make the `project_dir` variable point to the device project root.
+
+This is filled out and executed once per student.
+
+```elixir
+project_kino =
+  Kino.Input.text("Enter directory containing \"CMakeLists.txt\" file",
+    default: "/home/aslak/vcs/git/iot-course/src/wifi-count/esp32-freetros/"
+  )
+```
+
+```elixir
+project_dir =
+  project_kino
+  |> Kino.Input.read()
+
+File.exists?(project_dir)
+```
+
+## Project Cleanup
+
+This section is executed once per student.
+
+<!-- livebook:{"break_markdown":true} -->
+
+Remove old config:
+
+```elixir
+File.rm("#{project_dir}/sdkconfig")
+```
+
+Remove any leftover build products:
+
+```elixir
+:file.del_dir_r("#{project_dir}/build")
+```
+
+Ask `idf.py` to do a "fullclean":
+
+```elixir
+{fullclean_output, fullclean_rc} =
+  System.cmd(idf_path, ["fullclean"], cd: project_dir, env: env)
+```
+
+```elixir
+fullclean_output
+|> String.replace("error", "<b style=\"color:brown\">error</b>")
+|> String.replace("Nothing to clean", "<b style=\"color:green\">Nothing to clean</b>")
+|> (fn text -> "<tt>#{text}</tt>" end).()
+|> Kino.HTML.new()
+```
+
+## Configure Project
+
+This section reads in the configuration of the device project, injects relevant properties and saves it back.
+
+It is executed once per student.
+
+```elixir
+config_filename = "#{project_dir}/main/Kconfig.projbuild"
+File.exists?(config_filename)
+```
+
+Read lines:
+
+```elixir
+lines =
+  config_filename
+  |> File.read!()
+  |> String.split("\n")
+
+lines |> Enum.join("\n") |> IO.puts()
+```
+
+Modify lines:
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+new_lines =
+  lines
+  |> List.foldl({[], :outside}, fn line, {acc, state} ->
+    trimmed_line = String.trim(line)
+
+    {new_line, new_state} =
+      case {trimmed_line, state} do
+        {"config " <> key, _} ->
+          {line, {:inside, key}}
+
+        {"default \"" <> _rest, {:inside, key}} ->
+          captures =
+            Regex.named_captures(
+              ~r/(?<before>\s*default\s+\")(?<value>[^\"]*)(?<after>\"\s*)/,
+              line
+            )
+
+          value = Map.get(config, key, Map.get(captures, "value"))
+          {Map.get(captures, "before") <> value <> Map.get(captures, "after"), state}
+
+        _ ->
+          {line, state}
+      end
+
+    {[new_line | acc], new_state}
+  end)
+  |> elem(0)
+  |> Enum.reverse()
+  |> Enum.join("\n")
+
+new_lines |> IO.puts()
+```
+
+Write back modified lines:
+
+```elixir
+{:ok, writer} = File.open(config_filename, [:write])
+IO.write(writer, new_lines)
+File.close(writer)
+```
+
+## Build Device Project
+
+This section builds to project according to the configuration and the established environment.
+
+It is executed once per student.
+
+```elixir
+{build_output, build_rc} = System.cmd(idf_path, ["build"], cd: project_dir, env: env)
+```
+
+```elixir
+build_output
+|> String.replace("\n", "\n<br />")
+|> String.replace("error", "<b style=\"color:brown\">error</b>")
+|> String.replace("FAILED", "<b style=\"color:brown\">FAILED</b>")
+|> String.replace("warning", "<b style=\"color:purple\">warning</b>")
+|> String.replace("Project build complete", "<b style=\"color:green\">Project build complete</b>")
+|> (fn text -> "<tt>#{text}</tt>" end).()
+|> Kino.HTML.new()
+```
+
+## Flash Device
+
+This section flashes the produced project binary to the device.
+
+This is executed once per student.
+
+```elixir
+uarts = Circuits.UART.enumerate()
+uart_kino = Kino.Input.select("Port:", Enum.map(uarts, fn {k, _v} -> {k, k} end))
+```
+
+```elixir
+port = "/dev/" <> Kino.Input.read(uart_kino)
+{flash_output, flash_rc} = System.cmd(idf_path, ["-p", port, "flash"], cd: project_dir, env: env)
+```
+
+```elixir
+flash_output
+|> String.replace("\n", "\n<br />")
+|> String.replace("error", "<b style=\"color:brown\">error</b>")
+|> String.replace("FAILED", "<b style=\"color:brown\">FAILED</b>")
+|> String.replace("warning", "<b style=\"color:purple\">warning</b>")
+|> String.replace("Hash of data verified.", "<b style=\"color:green\">Hash of data verified.</b>")
+|> (fn text -> "<tt>#{text}</tt>" end).()
+|> Kino.HTML.new()
+```
+
+## Observe Result
+
+This section is executed at least once per student.
+
+<!-- livebook:{"break_markdown":true} -->
+
+First, lets remove the protocol from the broker URL:
+
+```elixir
+mqtt_broker_protoless = mqtt_broker |> String.split("//") |> Enum.at(1)
+```
+
+Module to keep track of status:
+
+```elixir
+defmodule Status do
+  use GenServer
+
+  # client interface
+
+  def start_link(frame) do
+    GenServer.start_link(__MODULE__, frame, name: __MODULE__)
+  end
+
+  def start(frame) do
+    GenServer.start(__MODULE__, frame, name: __MODULE__)
+  end
+
+  def new_test(ttl, timeout) do
+    GenServer.cast(__MODULE__, {:new_test, ttl, timeout})
+  end
+
+  def recv(success, ttl, temp, uptime) do
+    GenServer.cast(__MODULE__, {:recv, success, ttl, temp, uptime})
+  end
+
+  # callbacks
+
+  @impl true
+  def init(frame) do
+    {:ok, %{frame: frame, start: 0, ttl: -1, timeout: -1, recv: []}}
+  end
+
+  @impl true
+  def handle_cast({:new_test, ttl, timeout}, state) do
+    state = Map.merge(state, %{start: get_time(), ttl: ttl, timeout: timeout, recv: []})
+    update(state)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:recv, success, ttl, temp, uptime}, state) do
+    entry = %{
+      time: get_time(),
+      success: success,
+      ttl: ttl,
+      temp: temp,
+      uptime: uptime
+    }
+
+    state = Map.update!(state, :recv, fn l -> [entry | l] end)
+    update(state)
+    {:noreply, state}
+  end
+
+  # helpers
+
+  defp update(state) do
+    recv = state.recv |> Enum.reverse()
+    recv_success = recv |> Enum.filter(fn entry -> entry.success == :ok end)
+
+    timing =
+      recv_success
+      |> Enum.map(fn entry ->
+        t_ideal = state.timeout * (state.ttl - entry.ttl)
+        t_real = entry.time - state.start
+        abs(t_real - t_ideal)
+      end)
+
+    response_status =
+      case length(recv_success) do
+        count when count == state.ttl -> "ok"
+        count when count < state.ttl -> "missing responses"
+        _ -> "too many responses"
+      end
+
+    md =
+      """
+      Status:
+      - **Config:**
+        - Start: #{state.start}
+        - TTL: #{state.ttl}
+        - Timeout: #{state.timeout}
+      - **Responses:**
+      #{recv |> Enum.map(fn entry -> "   - **success:** #{entry.success} **ttl:** #{entry.ttl} **temp:** #{entry.temp}℃ **uptime:** #{entry.uptime}ms" end) |> Enum.join("\n")}
+      - **Timing:**
+      #{timing |> Enum.map(fn time -> "   - off by #{time}ms" end) |> Enum.join("\n")}
+      - **Stats:**
+        - Response count: #{length(recv)}
+        - Response status: **#{response_status}**
+        - Minimum error: #{if length(timing) == 0 do
+        "NA "
+      else
+        Enum.min(timing)
+      end}ms
+        - Average error: #{if length(timing) == 0 do
+        "NA "
+      else
+        Enum.sum(timing) / length(timing)
+      end}ms
+        - Maximum error: #{if length(timing) == 0 do
+        "NA "
+      else
+        Enum.max(timing)
+      end}ms
+      """
+      |> Kino.Markdown.new()
+
+    Kino.Frame.render(state.frame, md)
+  end
+
+  defp get_time() do
+    :os.system_time(:milli_seconds)
+  end
+end
+```
+
+Module to listen for MQTT events:
+
+```elixir
+defmodule MqttListener do
+  use Tortoise.Handler
+
+  def start_link(args) do
+    GenServer.start(__MODULE__, args)
+  end
+
+  # callback functions
+
+  @impl true
+  def init([]) do
+    {:ok, %{}}
+  end
+
+  def handle_message(_topic, payload, state) do
+    captures = Regex.named_captures(~r/(?<ttl>\d+),(?<temp>\d+\.\d+),(?<uptime>\d+)/, payload)
+
+    {success, ttl, temp, uptime} =
+      case captures do
+        nil ->
+          {:malformed, -1, -1, -1}
+
+        %{"ttl" => ttl, "temp" => temp, "uptime" => uptime} ->
+          {:ok, String.to_integer(ttl), String.to_float(temp), String.to_integer(uptime)}
+      end
+
+    Status.recv(success, ttl, temp, uptime)
+
+    {:ok, state}
+  end
+
+  # helpers
+
+  def child_spec(opts) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [opts]},
+      type: :worker,
+      restart: :permanent,
+      shutdown: 500
+    }
+  end
+end
+```
+
+Receive response messages, measure the timing between them and count them:
+
+```elixir
+frame = Kino.Frame.new()
+```
+
+```elixir
+status_pid =
+  case Status.start(frame) do
+    {:ok, pid} -> pid
+    {:error, {:already_started, pid}} -> pid
+  end
+```
+
+Start MQTT listener client:
+
+```elixir
+{:ok, listener_pid} =
+  Tortoise.Connection.start_link(
+    client_id: "listener",
+    server: {Tortoise.Transport.Tcp, host: mqtt_broker_protoless, port: 1883},
+    handler: {
+      MqttListener,
+      []
+    },
+    subscriptions: [{mqtt_response_topic, 2}]
+  )
+```
+
+Start MQTT producer client:
+
+```elixir
+Tortoise.Supervisor.start_child(
+  client_id: "producer",
+  handler: {Tortoise.Handler.Default, []},
+  server: {Tortoise.Transport.Tcp, host: mqtt_broker_protoless, port: 1883},
+  subscriptions: []
+)
+```
+
+Configure test:
+
+```elixir
+element_ttl = Kino.Input.number("Count", default: 3)
+element_period = Kino.Input.number("Period", default: 1000)
+
+elements = [
+  element_ttl,
+  element_period
+]
+
+Kino.Layout.grid(elements)
+```
+
+```elixir
+ttl = Kino.Input.read(element_ttl)
+period = Kino.Input.read(element_period)
+
+Kino.Markdown.new("""
+Test config:
+- **Number of messages:** #{ttl}
+- **Time between messages:** #{period}ms
+""")
+```
+
+```elixir
+Status.new_test(ttl, period)
+Tortoise.publish("producer", mqtt_command_topic, "measure:#{ttl},#{period}")
+```
+
+## Statistics
+
+This section produces a set of summary statistics where zero errors and warnings is expected.
+
+Executed once per student.
+
+```elixir
+error_count = length(String.split(String.downcase(build_output), "error")) - 1
+
+warning_count =
+  build_output |> String.downcase() |> String.split("warning") |> (fn es -> length(es) - 1 end).()
+
+Kino.Markdown.new("""
+- Config:
+  - **File existance:** #{File.exists?(config_filename)}
+- Build:
+  - **Errors:** #{error_count}
+  - **Warnings:** #{warning_count}
+  - **Success:** #{build_rc == 0}
+- Flash
+  - **Success:** #{flash_rc == 0}
+""")
+```
