@@ -26,3 +26,14 @@ mix phx.server
 ## Open script
 
 Locate file in local storage.
+
+# Build and flash ESP32
+
+Open ESP-IDF 5.2 CMD
+
+```
+cd ../../../Users/caspe/Desktop/Github/Vimian/iot/assignment_2/src
+
+idf.py build
+idf.py -p COM3 flash
+```
