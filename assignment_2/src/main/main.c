@@ -13,6 +13,12 @@
 #define ADC_BITWIDTH ADC_BITWIDTH_12
 #define ADC_ATTEN ADC_ATTEN_DB_12
 
+#define WIFI_SSID CONFIG_WIFI_SSID
+#define WIFI_PASS CONFIG_WIFI_PASS
+#define MQTT_BROKER CONFIG_MQTT_BROKER
+#define MQTT_COMMAND_TOPIC CONFIG_MQTT_COMMAND_TOPIC
+#define MQTT_RESPONSE_TOPIC CONFIG_MQTT_RESPONSE_TOPIC
+
 static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle);
 static void adc_calibration_deinit(adc_cali_handle_t handle);
 
@@ -58,6 +64,12 @@ void app_main(void)
         int temp = ((10.888 - sqrt( pow(-10.888, 2) + 4 * 0.00347 * (1777.3 - voltage))) / (2 * -0.00347)) + 30;
 
         printf("temp: %d\n", temp);
+
+        printf("WIFI_SSID: %s\n", WIFI_SSID);
+        printf("WIFI_PASS: %s\n", WIFI_PASS);
+        printf("MQTT_BROKER: %s\n", MQTT_BROKER);
+        printf("MQTT_COMMAND_TOPIC: %s\n", MQTT_COMMAND_TOPIC);
+        printf("MQTT_RESPONSE_TOPIC: %s\n", MQTT_RESPONSE_TOPIC);
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

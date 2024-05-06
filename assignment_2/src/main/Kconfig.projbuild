@@ -1,5 +1,23 @@
-WIFI_SSID=wifi_ssid
-WIFI_PASS=wifi_pass
-MQTT_BROKER="mqtt://broker.hivemq.com"
-MQTT_COMMAND_TOPIC="org/sdu/2024/iot/my/name/command"
-MQTT_RESPONSE_TOPIC="org/sdu/2024/iot/my/name/response"
+menu "Configuration"
+
+  config WIFI_SSID
+    string "WiFi SSID"
+    default "myssid"
+
+  config WIFI_PASS
+    string "WiFi Password"
+    default "mypassword"
+
+  config MQTT_BROKER
+    string "MQTT Broker URL"
+    default "mqtt://broker.hivemq.com"
+
+  config MQTT_COMMAND_TOPIC
+    string "MQTT Command Topic"
+    default "org/sdu/2024/iot/my/name/command"
+
+  config MQTT_RESPONSE_TOPIC
+    string "MQTT Response Topic"
+    default "org/sdu/2024/iot/my/name/response"
+    
+endmenu
