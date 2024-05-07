@@ -14,11 +14,12 @@ mix deps.get
 ## Open livebook
 
 ```
-cd <livebook github repo>
+cd ../../../Users/caspe/Desktop/Github/livebook-dev/livebook
 iex --sname test
 
 //New terminal
 
+cd ../../../Users/caspe/Desktop/Github/livebook-dev/livebook
 set MIX_ENV=prod
 mix phx.server
 ```

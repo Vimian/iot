@@ -9,6 +9,8 @@
 #include "esp_adc/adc_cali_scheme.h"
 
 #include <math.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -33,7 +35,6 @@
 #define MQTT_BROKER CONFIG_MQTT_BROKER
 #define MQTT_COMMAND_TOPIC CONFIG_MQTT_COMMAND_TOPIC
 #define MQTT_RESPONSE_TOPIC CONFIG_MQTT_RESPONSE_TOPIC
-
 
 /*---------------------------------------------------------------
         Temperature
@@ -143,6 +144,20 @@ void wifi_init_sta(void)
 }
 
 /*---------------------------------------------------------------
+        Temperature
+---------------------------------------------------------------*/
+int get_temperature()
+{
+    sample();
+    printf("raw: %d\n", adc_raw);
+    printf("cali: %d\n", voltage);
+
+    int temp = ((10.888 - sqrt( pow(-10.888, 2) + 4 * 0.00347 * (1777.3 - voltage))) / (2 * -0.00347)) + 30;
+
+    return temp;
+}
+
+/*---------------------------------------------------------------
         MQTT
 ---------------------------------------------------------------*/
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -165,6 +180,36 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             printf("MQTT_EVENT_DATA\n");
             printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
             printf("DATA=%.*s\r\n", event->data_len, event->data);
+
+            char data_str[100];
+            sprintf(data_str, "DATA=%.*s", event->data_len, event->data);
+
+            strtok(data_str, ":");
+            char *token = strtok(NULL, ":");
+            char *ttl_str = strtok(token, ",");
+            char *period_str = strtok(NULL, ",");
+
+            int ttl = atoi(ttl_str);
+            int period = atoi(period_str);
+
+            printf("count: %d\n", ttl);
+            printf("time: %d\n", period);
+
+            for (int i = 0; i < ttl;) {
+                i++;
+                struct timeval tv;
+                gettimeofday(&tv, NULL);
+                int timestamp = (int)tv.tv_sec * 1000 + (int)tv.tv_usec / 1000;
+
+                int temp = get_temperature();
+
+                char response[100];
+                sprintf(response, "%d,%d,%d", ttl - i, temp, timestamp);
+                
+                esp_mqtt_client_publish(client, MQTT_RESPONSE_TOPIC, response, 0, 0, 0);
+
+                vTaskDelay(pdMS_TO_TICKS(period));
+            }
             break;
         case MQTT_EVENT_ERROR:
             printf("MQTT_EVENT_ERROR\n");
