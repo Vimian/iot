@@ -146,15 +146,15 @@ void wifi_init_sta(void)
 /*---------------------------------------------------------------
         Temperature
 ---------------------------------------------------------------*/
-int get_temperature()
+float get_temperature()
 {
     sample();
     printf("raw: %d\n", adc_raw);
     printf("cali: %d\n", voltage);
 
-    int temp = ((10.888 - sqrt( pow(-10.888, 2) + 4 * 0.00347 * (1777.3 - voltage))) / (2 * -0.00347)) + 30;
+    int temp = (((10.888 - sqrt( pow(-10.888, 2) + 4 * 0.00347 * (1777.3 - voltage))) / (2 * -0.00347)) + (30)) * 10;
 
-    return temp;
+    return (float)temp / 10;
 }
 
 /*---------------------------------------------------------------
@@ -201,10 +201,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 gettimeofday(&tv, NULL);
                 int timestamp = (int)tv.tv_sec * 1000 + (int)tv.tv_usec / 1000;
 
-                int temp = get_temperature();
+                float temp = get_temperature();
 
                 char response[100];
-                sprintf(response, "%d,%d,%d", ttl - i, temp, timestamp);
+                sprintf(response, "%d,%f,%d", ttl - i, temp, timestamp);
                 
                 esp_mqtt_client_publish(client, MQTT_RESPONSE_TOPIC, response, 0, 0, 0);
 
