@@ -1,5 +1,0 @@
-WIFI_SSID=wifi_ssid
-WIFI_PASS=wifi_pass
-MQTT_BROKER="mqtt://broker.hivemq.com"
-MQTT_COMMAND_TOPIC="org/sdu/2024/iot/my/name/command"
-MQTT_RESPONSE_TOPIC="org/sdu/2024/iot/my/name/response"

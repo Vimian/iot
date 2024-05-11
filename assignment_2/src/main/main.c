@@ -169,7 +169,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_CONNECTED:
             printf("MQTT_EVENT_CONNECTED\n");
-            //msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "data_3", 0, 1, 0);
             msg_id = esp_mqtt_client_subscribe(client, MQTT_COMMAND_TOPIC, 0);
             printf("sent subscribe successful, msg_id=%d\n", msg_id);
             break;
@@ -249,20 +248,6 @@ void app_main(void)
     wifi_init_sta();
 
     mqtt_app_start();
-
-    /*while (1) {
-        sample();
-        printf("raw: %d\n", adc_raw);
-        printf("cali: %d\n", voltage);
-
-        int temp = ((10.888 - sqrt( pow(-10.888, 2) + 4 * 0.00347 * (1777.3 - voltage))) / (2 * -0.00347)) + 30;
-
-        printf("temp: %d\n", temp);
-        printf("got ip: " IPSTR, IP2STR(&ip));
-        printf("\n");
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }*/
 }
 
 /*---------------------------------------------------------------
