@@ -1,0 +1,28 @@
+@startuml
+Device -> WiFi: Connect (SSID, Password)
+Device -> Broker: Connect (URL)
+
+alt Connection Failed
+    Device -> WiFi: Reconnect
+end
+
+alt Connection Failed
+    Device -> Broker: Reconnect
+end
+
+Broker -> Device: Connection Response
+Device -> Broker: Subscribe (Command Topic)
+
+loop
+  Broker -> Device: Command "mesure:ttl,period"
+
+  loop for ttl times
+    Device -> Device: Callibrate
+    Device -> Sensor: Read voltage
+    Device -> Device: Calculate voltage (Calibrations, Reading)
+    Device -> Device: Convert voltage to temperature (1 Decimal formula)
+    Device -> Broker: Publish (Response topic, Temperature)
+    Device -> Device: Sleep (Period)
+  end
+end
+@enduml
